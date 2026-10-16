@@ -60,17 +60,23 @@
       <button data-p="3">3</button>
       <button data-p="4">4</button>
     </div>
-    <button id="onlineBtn">🌐 联机对战（2 人）</button>
+    <button id="onlineBtn">🌐 联机对战（2-4 人）</button>
     <p class="keys">1P WASD+空格 · 2P 方向键+回车 · 3P IJKL+U · 4P TFGH+R · Esc 返回</p>
   </div>
 
   <div id="online" class="hidden">
     <h2>🌐 联机对战</h2>
-    <p class="mini">主机：选游戏 → 创建房间 → 把房间码发给好友</p>
+    <p class="mini">主机：选游戏和人数 → 创建房间 → 好友各自输入房间码加入</p>
     <div class="games">
       <button class="ogame on" data-game="tank">坦克</button>
       <button class="ogame" data-game="soccer">足球</button>
       <button class="ogame" data-game="race">赛车</button>
+    </div>
+    <div class="pcount">
+      <span>人数</span>
+      <button class="op on" data-p="2">2</button>
+      <button class="op" data-p="3">3</button>
+      <button class="op" data-p="4">4</button>
     </div>
     <button id="hostBtn">创建房间</button>
     <div style="display:flex;gap:8px">
@@ -125,13 +131,13 @@ function sendGuestInput(){ if (role==='guest' && conn && conn.open) conn.send({t
 addEventListener('keydown', e => {
   const m = KEYMAP[e.code]; if (!m) return;
   if (PREVENT.has(e.code)) e.preventDefault();
-  if (role==='host' && m.p===1) return;      // 主机：2P 由远端控制
+  if (role==='host' && m.p>=1) return;      // 主机：2P 由远端控制
   input[m.p][m.k] = true;
   sendGuestInput();
 });
 addEventListener('keyup', e => {
   const m = KEYMAP[e.code]; if (!m) return;
-  if (role==='host' && m.p===1) return;
+  if (role==='host' && m.p>=1) return;
   input[m.p][m.k] = false;
   sendGuestInput();
 });
@@ -148,9 +154,13 @@ function drawFx(){ for (const f of fx){ ctx.globalAlpha=f.life/f.max; ctx.stroke
 const app = { state:'menu', game:null, players:2 };
 let lastGame = null;
 let role = null;            // null | 'host' | 'guest'
-let peer = null, conn = null, netTimer = null, remoteState = null;
-const remoteKeys = {up:false,down:false,left:false,right:false,fire:false};
-let onlineGame = 'tank';
+let peer = null, conn = null, conns = [], netTimer = null, remoteState = null;
+const remoteKeys = [  // 主机用：每个远端玩家一份按键（下标 0 = 玩家1）
+  {up:false,down:false,left:false,right:false,fire:false},
+  {up:false,down:false,left:false,right:false,fire:false},
+  {up:false,down:false,left:false,right:false,fire:false},
+];
+let onlineGame = 'tank', onlinePlayers = 2, guestSlot = 1;
 const menuEl=document.getElementById('menu'), resultEl=document.getElementById('result'), onlineEl=document.getElementById('online'),
       hudEl=document.getElementById('hud'), rTitle=document.getElementById('rTitle'), rText=document.getElementById('rText'),
       netStatus=document.getElementById('netStatus'), againBtn=document.getElementById('againBtn');
@@ -160,9 +170,9 @@ function resetInput(){ for (const i of input) i.up=i.down=i.left=i.right=i.fire=
 function finish(title, text){
   app.state='result'; rTitle.textContent=title; rText.textContent=text; hide(hudEl); show(resultEl);
   if (role){ hide(againBtn); } else { show(againBtn); }
-  if (role==='host' && conn && conn.open) conn.send({type:'result', title, text});
+  if (role==='host') for (const c of conns) if (c.open) c.send({type:'result', title, text});
 }
-function cleanupNet(){ clearInterval(netTimer); if (conn){ try{conn.close();}catch(e){} } if (peer){ try{peer.destroy();}catch(e){} } conn=null; peer=null; role=null; remoteState=null; }
+function cleanupNet(){ clearInterval(netTimer); for (const c of conns){ try{c.close();}catch(e){} } if (conn){ try{conn.close();}catch(e){} } if (peer){ try{peer.destroy();}catch(e){} } conn=null; conns=[]; peer=null; role=null; remoteState=null; }
 function startGame(name){
   lastGame = name;
   app.game = GAMES[name]; app.state = 'playing';
@@ -174,18 +184,21 @@ function startGame(name){
 function startOnline(game, r){
   role = r;
   app.game = GAMES[game]; app.state = 'playing';
-  app.game.init(2);
+  app.game.init(onlinePlayers);
   resetInput();
   hide(menuEl); hide(resultEl); hide(onlineEl); show(hudEl);
   clearInterval(netTimer);
   netTimer = setInterval(() => {
     if (app.state !== 'playing') return;
-    if (role==='host' && conn && conn.open) conn.send({type:'state', s: app.game.serialize()});
+    if (role==='host'){
+      const s = app.game.serialize();
+      for (const c of conns) if (c.open) c.send({type:'state', s});
+    }
     if (role==='guest' && conn && conn.open) conn.send({type:'input', keys: input[0]});
   }, 50);
 }
 function toMenu(){
-  if (role==='host' && conn && conn.open) conn.send({type:'end'});
+  if (role==='host') for (const c of conns) if (c.open) c.send({type:'end'});
   cleanupNet();
   app.state='menu'; app.game=null; resetInput();
   hide(hudEl); hide(resultEl); hide(onlineEl); show(menuEl);
@@ -193,19 +206,24 @@ function toMenu(){
 /* ---- PeerJS 联机 ---- */
 function startHost(){
   if (!window.Peer){ netStatus.textContent='联机组件未加载（需联网刷新）'; return; }
-  cleanupNet(); netStatus.textContent='正在创建房间…';
+  cleanupNet(); conns = [];
+  netStatus.textContent='正在创建房间…';
   peer = new Peer();
   peer.on('open', id => {
     role='host';
-    netStatus.textContent='房间码：'+id+'（等待好友加入…）';
+    netStatus.textContent='房间码：'+id+'（0/'+(onlinePlayers-1)+'）';
     peer.on('connection', c => {
-      conn = c;
       c.on('open', () => {
-        conn.on('data', d => { if (d.type==='input') Object.assign(remoteKeys, d.keys); });
-        conn.send({type:'start', game: onlineGame});
-        startOnline(onlineGame, 'host');
+        const slot = conns.length + 1;      // 远端玩家编号 1..N-1
+        conns.push(c); c._slot = slot;
+        c.on('data', d => { if (d.type==='input') Object.assign(remoteKeys[slot-1], d.keys); });
+        c.on('close', () => { if (app.state!=='menu') toMenu(); });
+        netStatus.textContent='房间码：'+id+'（'+conns.length+'/'+(onlinePlayers-1)+'）';
+        if (conns.length >= onlinePlayers - 1){
+          for (const cc of conns) cc.send({type:'start', game:onlineGame, players:onlinePlayers, slot:cc._slot});
+          startOnline(onlineGame, 'host');
+        }
       });
-      c.on('close', () => { if (app.state!=='menu') toMenu(); });
     });
   });
   peer.on('error', e => { netStatus.textContent='联机出错：'+e.type; });
@@ -219,7 +237,7 @@ function joinRoom(code){
     conn = peer.connect(code.trim(), {reliable:false});
     conn.on('open', () => { netStatus.textContent='已连接，等待主机开始…'; });
     conn.on('data', d => {
-      if (d.type==='start'){ startOnline(d.game, 'guest'); }
+      if (d.type==='start'){ onlineGame=d.game; onlinePlayers=d.players; guestSlot=d.slot; startOnline(d.game, 'guest'); }
       else if (d.type==='state'){ remoteState = d.s; }
       else if (d.type==='result'){ finish(d.title, d.text); }
       else if (d.type==='end'){ toMenu(); }
@@ -489,7 +507,7 @@ const TankGame = {
       }
       if (b.dead) continue;
       for (const t of this.tanks){
-        if (!t.alive || t.i===b.owner) continue;
+        if (!t.alive) continue;   // 无差别伤害：炮弹可命中任何坦克，反弹后也可能误伤自己
         if (rectOverlap(b.x,b.y,4,4,t.x,t.y,TANK_SIZE,TANK_SIZE)){
           if (t.shield){ t.shield=false; } else { t.alive=false; boom(t.x+TANK_SIZE/2,t.y+TANK_SIZE/2,t.color); beep(140,0.3,'sawtooth',0.08); }
           b.dead=true; break;
@@ -723,6 +741,9 @@ document.querySelectorAll('.game').forEach(btn => {
 document.querySelectorAll('.ogame').forEach(btn => {
   btn.onclick = () => { onlineGame=btn.dataset.game; document.querySelectorAll('.ogame').forEach(b=>b.classList.toggle('on', b===btn)); };
 });
+document.querySelectorAll('.op').forEach(btn => {
+  btn.onclick = () => { onlinePlayers=+btn.dataset.p; document.querySelectorAll('.op').forEach(b=>b.classList.toggle('on', b===btn)); };
+});
 document.getElementById('onlineBtn').onclick = () => { hide(menuEl); show(onlineEl); netStatus.textContent=''; };
 document.getElementById('onlineBack').onclick = () => { if (app.state!=='playing') cleanupNet(); hide(onlineEl); show(menuEl); };
 document.getElementById('hostBtn').onclick = () => startHost();
@@ -744,7 +765,7 @@ function tick(){
       if (remoteState) app.game.applyState(remoteState);
       app.game.draw();
     } else {
-      if (role==='host'){ const r=input[1], k=remoteKeys; r.up=k.up; r.down=k.down; r.left=k.left; r.right=k.right; r.fire=k.fire; }
+      if (role==='host'){ for (let i=1;i<onlinePlayers;i++){ const r=input[i], k=remoteKeys[i-1]; r.up=k.up; r.down=k.down; r.left=k.left; r.right=k.right; r.fire=k.fire; } }
       app.game.update();
       updateFx();
       app.game.draw();
