@@ -263,6 +263,81 @@ const TANK_MAPS = [
    "#           #",
    "#############",
   ],
+  [
+   "#############",
+   "#           #",
+   "#   W   W   #",
+   "# B W B W B #",
+   "#   W   W   #",
+   "#  W  B  W  #",
+   "#   W   W   #",
+   "#  W  B  W  #",
+   "#   W   W   #",
+   "# B W B W B #",
+   "#   W   W   #",
+   "#           #",
+   "#############",
+  ],
+  [
+   "#############",
+   "#           #",
+   "#  B   B    #",
+   "#    #      #",
+   "# I  #  I   #",
+   "#  B B B B  #",
+   "#    # #    #",
+   "#  B B B B  #",
+   "# I  #  I   #",
+   "#    #      #",
+   "#  B   B    #",
+   "#           #",
+   "#############",
+  ],
+  [
+   "#############",
+   "#           #",
+   "#    W      #",
+   "# G  W  G   #",
+   "#   B W B   #",
+   "# B  BWB  B #",
+   "#     W     #",
+   "# B  BWB  B #",
+   "#   B W B   #",
+   "# G  W  G   #",
+   "#    W      #",
+   "#           #",
+   "#############",
+  ],
+  [
+   "#############",
+   "#I         I#",
+   "#I  B   B  I#",
+   "#   #   #   #",
+   "# B B   B B #",
+   "#   #   #   #",
+   "#     W     #",
+   "#   #   #   #",
+   "# B B   B B #",
+   "#   #   #   #",
+   "#I  B   B  I#",
+   "#I         I#",
+   "#############",
+  ],
+  [
+   "#############",
+   "#           #",
+   "#    ###    #",
+   "#   B   B   #",
+   "#  W     W  #",
+   "#  W  G  W  #",
+   "#  W     W  #",
+   "#  W  G  W  #",
+   "#  W     W  #",
+   "#   B   B   #",
+   "#    ###    #",
+   "#           #",
+   "#############",
+  ],
 ];
 function tileAt(map, x, y){
   const tx=Math.floor(x/40), ty=Math.floor(y/40);
@@ -316,10 +391,21 @@ const TankGame = {
     t.y+=d[1]*sp; if (this.collides(t)) t.y-=d[1]*sp;
   },
   onIce(t){ return tileAt(this.map, t.x+TANK_SIZE/2, t.y+TANK_SIZE/2)==='I'; },
+  hitsSteel(b){
+    for (const [px,py] of [[b.x,b.y],[b.x+4,b.y],[b.x,b.y+4],[b.x+4,b.y+4]]){
+      if (tileAt(this.map, px, py)==='#') return true;
+    }
+    return false;
+  },
+  bounce(b){
+    b.bounces = (b.bounces || 0) + 1;
+    beep(320, 0.05, 'square', 0.04);
+    if (b.bounces >= 3) b.dead = true;
+  },
   shoot(t){
     const d=[[0,-1],[1,0],[0,1],[-1,0]][t.dir];
     const cx=t.x+TANK_SIZE/2, cy=t.y+TANK_SIZE/2;
-    this.bullets.push({x:cx-2+d[0]*(TANK_SIZE/2+2), y:cy-2+d[1]*(TANK_SIZE/2+2), dx:d[0]*BULLET_SPEED, dy:d[1]*BULLET_SPEED, owner:t.i});
+    this.bullets.push({x:cx-2+d[0]*(TANK_SIZE/2+2), y:cy-2+d[1]*(TANK_SIZE/2+2), dx:d[0]*BULLET_SPEED, dy:d[1]*BULLET_SPEED, owner:t.i, bounces:0});
     beep(660,0.06,'square',0.03);
   },
   update(){
@@ -340,14 +426,19 @@ const TankGame = {
     }
     this.powerups=this.powerups.filter(p=>!p.dead);
     for (const b of this.bullets){
-      b.x+=b.dx; b.y+=b.dy;
+      // 弹道反射：碰钢墙反弹（最多 3 次），可借墙打拐角后的敌人
+      b.x += b.dx;
+      if (this.hitsSteel(b)){ b.x -= b.dx; b.dx = -b.dx; this.bounce(b); }
+      b.y += b.dy;
+      if (this.hitsSteel(b)){ b.y -= b.dy; b.dy = -b.dy; this.bounce(b); }
+      if (b.dead) continue;
       const c=tileAt(this.map, b.x+2, b.y+2);
       if (c==='B'){
         const tx=Math.floor((b.x+2)/40), ty=Math.floor((b.y+2)/40);
         const row=this.map[ty].split(''); row[tx]=' '; this.map[ty]=row.join('');
         if (Math.random()<0.25){ const ty2=['shield','rapid','speed'][Math.floor(Math.random()*3)]; this.powerups.push({x:tx*40+10, y:ty*40+10, type:ty2}); }
         b.dead=true;
-      } else if (c==='#'){ b.dead=true; }
+      }
       if (b.dead) continue;
       for (const t of this.tanks){
         if (!t.alive || t.i===b.owner) continue;
