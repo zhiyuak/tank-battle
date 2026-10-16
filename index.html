@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Action for 2-4 · 同屏派对</title>
+<title>派对竞技场 · Party Arena</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:#0b0f14;color:#e8eef2;font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
@@ -14,20 +14,27 @@
   #hud{position:absolute;top:8px;right:8px}
   #hud button{background:#2a3644;color:#e8eef2;border:0;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px}
   #hud button:hover{background:#3a4a5c}
-  #menu,#result{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-                gap:16px;background:rgba(10,15,20,.94);border-radius:8px;text-align:center;padding:20px}
-  #menu h1{font-size:32px;letter-spacing:3px}
+  #menu,#result,#online{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+                gap:14px;background:rgba(10,15,20,.94);border-radius:8px;text-align:center;padding:20px}
+  #menu h1{font-size:30px;letter-spacing:2px}
   #menu h1 span{color:#ffcf3d}
   #menu .sub{font-size:13px;opacity:.7}
   .games{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
-  .games button{background:#1c2836;color:#e8eef2;border:1px solid #3a4a5c;padding:16px 18px;border-radius:12px;
-                cursor:pointer;font-size:16px;min-width:118px}
+  .games button{background:#1c2836;color:#e8eef2;border:1px solid #3a4a5c;padding:14px 16px;border-radius:12px;
+                cursor:pointer;font-size:15px;min-width:108px}
   .games button:hover{background:#27374a;border-color:#5a748e}
+  .games button.on{background:#ffcf3d;color:#111;border-color:#ffcf3d}
   .pcount{display:flex;align-items:center;gap:8px}
   .pcount span{opacity:.7;font-size:13px}
   .pcount button{width:36px;height:36px;border-radius:50%;border:1px solid #3a4a5c;background:#1c2836;color:#e8eef2;cursor:pointer;font-size:15px}
   .pcount button.on{background:#ffcf3d;color:#111;border-color:#ffcf3d}
   .keys{font-size:11px;opacity:.55;max-width:420px;line-height:1.7}
+  #onlineBtn{background:#1c2836;color:#e8eef2;border:1px solid #3a4a5c;padding:12px 22px;border-radius:10px;cursor:pointer;font-size:15px}
+  #onlineBtn:hover{background:#27374a}
+  #online input{background:#1c2836;border:1px solid #3a4a5c;color:#e8eef2;padding:9px 12px;border-radius:8px;font-size:14px;width:180px;text-align:center}
+  #online #netStatus{font-size:13px;opacity:.85;min-height:18px}
+  #online .mini{font-size:12px;opacity:.6}
+  .back{background:#2a3644;color:#e8eef2;border:0;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px}
   #result h2{font-size:26px}
   #result p{font-size:15px;opacity:.92;line-height:1.8;white-space:pre-line}
   #result button{background:#ffcf3d;color:#111;border:0;padding:10px 20px;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600}
@@ -38,9 +45,10 @@
 <div id="wrap">
   <canvas id="game" width="520" height="520"></canvas>
   <div id="hud" class="hidden"><button id="backBtn">← 菜单</button></div>
+
   <div id="menu">
-    <h1>ACTION <span>for 2–4</span></h1>
-    <p class="sub">同屏派对 · 参照《Action for 2-4 Players》</p>
+    <h1>派对竞技场 <span>PARTY ARENA</span></h1>
+    <p class="sub">同屏 · 联机 · 2–4 人</p>
     <div class="games">
       <button class="game" data-game="tank">🛡️ 坦克对战</button>
       <button class="game" data-game="soccer">⚽ 桌球足球</button>
@@ -52,8 +60,27 @@
       <button data-p="3">3</button>
       <button data-p="4">4</button>
     </div>
-    <p class="keys">1P WASD+空格 · 2P 方向键+回车 · 3P IJKL+U · 4P TFGH+R · Esc 返回菜单</p>
+    <button id="onlineBtn">🌐 联机对战（2 人）</button>
+    <p class="keys">1P WASD+空格 · 2P 方向键+回车 · 3P IJKL+U · 4P TFGH+R · Esc 返回</p>
   </div>
+
+  <div id="online" class="hidden">
+    <h2>🌐 联机对战</h2>
+    <p class="mini">主机：选游戏 → 创建房间 → 把房间码发给好友</p>
+    <div class="games">
+      <button class="ogame on" data-game="tank">坦克</button>
+      <button class="ogame" data-game="soccer">足球</button>
+      <button class="ogame" data-game="race">赛车</button>
+    </div>
+    <button id="hostBtn">创建房间</button>
+    <div style="display:flex;gap:8px">
+      <input id="joinCode" placeholder="输入房间码">
+      <button id="joinBtn" class="back">加入房间</button>
+    </div>
+    <p id="netStatus"></p>
+    <button id="onlineBack" class="back">返回</button>
+  </div>
+
   <div id="result" class="hidden">
     <h2 id="rTitle"></h2>
     <p id="rText"></p>
@@ -61,12 +88,15 @@
     <button id="menuBtn">返回菜单</button>
   </div>
 </div>
+
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
 const PLAYER_COLORS = ['#ffcf3d','#7ee07e','#ff6b6b','#6ec6ff'];
 const PLAYER_NAMES = ['玩家1','玩家2','玩家3','玩家4'];
+let FRAME = 0;
 
 /* ========== 音效 ========== */
 let audioCtx = null;
@@ -91,14 +121,19 @@ const KEYMAP = {
 };
 const input = Array.from({length:4}, () => ({up:false,down:false,left:false,right:false,fire:false}));
 const PREVENT = new Set(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter']);
+function sendGuestInput(){ if (role==='guest' && conn && conn.open) conn.send({type:'input', keys: input[0]}); }
 addEventListener('keydown', e => {
   const m = KEYMAP[e.code]; if (!m) return;
   if (PREVENT.has(e.code)) e.preventDefault();
+  if (role==='host' && m.p===1) return;      // 主机：2P 由远端控制
   input[m.p][m.k] = true;
+  sendGuestInput();
 });
 addEventListener('keyup', e => {
   const m = KEYMAP[e.code]; if (!m) return;
+  if (role==='host' && m.p===1) return;
   input[m.p][m.k] = false;
+  sendGuestInput();
 });
 addEventListener('keydown', e => { if (e.code === 'Escape' && app.state !== 'menu') toMenu(); });
 
@@ -109,197 +144,322 @@ function boom(x, y, color){ fx.push({x,y,r:6,life:18,max:18,color}); }
 function updateFx(){ for (const f of fx){ f.r += 1.6; f.life--; } for (let i=fx.length-1;i>=0;i--) if (fx[i].life<=0) fx.splice(i,1); }
 function drawFx(){ for (const f of fx){ ctx.globalAlpha=f.life/f.max; ctx.strokeStyle=f.color; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.stroke(); } ctx.globalAlpha=1; }
 
-/* ========== 应用状态 ========== */
+/* ========== 应用状态 / 菜单 / 联机 ========== */
 const app = { state:'menu', game:null, players:2 };
 let lastGame = null;
-const menuEl = document.getElementById('menu'), resultEl = document.getElementById('result'),
-      hudEl = document.getElementById('hud'), rTitle = document.getElementById('rTitle'), rText = document.getElementById('rText');
+let role = null;            // null | 'host' | 'guest'
+let peer = null, conn = null, netTimer = null, remoteState = null;
+const remoteKeys = {up:false,down:false,left:false,right:false,fire:false};
+let onlineGame = 'tank';
+const menuEl=document.getElementById('menu'), resultEl=document.getElementById('result'), onlineEl=document.getElementById('online'),
+      hudEl=document.getElementById('hud'), rTitle=document.getElementById('rTitle'), rText=document.getElementById('rText'),
+      netStatus=document.getElementById('netStatus'), againBtn=document.getElementById('againBtn');
 function show(el){ el.classList.remove('hidden'); }
 function hide(el){ el.classList.add('hidden'); }
 function resetInput(){ for (const i of input) i.up=i.down=i.left=i.right=i.fire=false; }
-function finish(title, text){ app.state='result'; rTitle.textContent=title; rText.textContent=text; hide(hudEl); show(resultEl); }
+function finish(title, text){
+  app.state='result'; rTitle.textContent=title; rText.textContent=text; hide(hudEl); show(resultEl);
+  if (role){ hide(againBtn); } else { show(againBtn); }
+  if (role==='host' && conn && conn.open) conn.send({type:'result', title, text});
+}
+function cleanupNet(){ clearInterval(netTimer); if (conn){ try{conn.close();}catch(e){} } if (peer){ try{peer.destroy();}catch(e){} } conn=null; peer=null; role=null; remoteState=null; }
 function startGame(name){
   lastGame = name;
   app.game = GAMES[name]; app.state = 'playing';
   app.game.init(app.players);
   resetInput();
-  hide(menuEl); hide(resultEl); show(hudEl);
+  hide(menuEl); hide(resultEl); hide(onlineEl); show(hudEl);
   if (document.activeElement) document.activeElement.blur();
 }
-function toMenu(){ app.state='menu'; app.game=null; resetInput(); hide(hudEl); hide(resultEl); show(menuEl); }
-
-/* ========== 游戏一：坦克对战（互射，先到 7 分） ========== */
-const TANK_SIZE = 30, TANK_SPEED = 2.2, BULLET_SPEED = 6;
-function tankBricks(){
-  const t = 40, R = [], add = (gx,gy) => R.push({x:gx*t+5, y:gy*t+5, w:t-10, h:t-10});
-  add(1,1); add(2,1); add(1,2);
-  add(10,1); add(11,1); add(11,2);
-  add(1,10); add(1,11); add(2,11);
-  add(10,11); add(11,11); add(11,10);
-  add(3,3); add(9,3); add(3,9); add(9,9);
-  add(6,3); add(6,9); add(3,6); add(9,6);
-  add(6,6);
-  return R;
+function startOnline(game, r){
+  role = r;
+  app.game = GAMES[game]; app.state = 'playing';
+  app.game.init(2);
+  resetInput();
+  hide(menuEl); hide(resultEl); hide(onlineEl); show(hudEl);
+  clearInterval(netTimer);
+  netTimer = setInterval(() => {
+    if (app.state !== 'playing') return;
+    if (role==='host' && conn && conn.open) conn.send({type:'state', s: app.game.serialize()});
+    if (role==='guest' && conn && conn.open) conn.send({type:'input', keys: input[0]});
+  }, 50);
 }
+function toMenu(){
+  if (role==='host' && conn && conn.open) conn.send({type:'end'});
+  cleanupNet();
+  app.state='menu'; app.game=null; resetInput();
+  hide(hudEl); hide(resultEl); hide(onlineEl); show(menuEl);
+}
+/* ---- PeerJS 联机 ---- */
+function startHost(){
+  if (!window.Peer){ netStatus.textContent='联机组件未加载（需联网刷新）'; return; }
+  cleanupNet(); netStatus.textContent='正在创建房间…';
+  peer = new Peer();
+  peer.on('open', id => {
+    role='host';
+    netStatus.textContent='房间码：'+id+'（等待好友加入…）';
+    peer.on('connection', c => {
+      conn = c;
+      c.on('open', () => {
+        conn.on('data', d => { if (d.type==='input') Object.assign(remoteKeys, d.keys); });
+        conn.send({type:'start', game: onlineGame});
+        startOnline(onlineGame, 'host');
+      });
+      c.on('close', () => { if (app.state!=='menu') toMenu(); });
+    });
+  });
+  peer.on('error', e => { netStatus.textContent='联机出错：'+e.type; });
+}
+function joinRoom(code){
+  if (!window.Peer){ netStatus.textContent='联机组件未加载（需联网刷新）'; return; }
+  cleanupNet(); netStatus.textContent='正在加入 '+code+'…';
+  peer = new Peer();
+  peer.on('open', () => {
+    role='guest';
+    conn = peer.connect(code.trim(), {reliable:false});
+    conn.on('open', () => { netStatus.textContent='已连接，等待主机开始…'; });
+    conn.on('data', d => {
+      if (d.type==='start'){ startOnline(d.game, 'guest'); }
+      else if (d.type==='state'){ remoteState = d.s; }
+      else if (d.type==='result'){ finish(d.title, d.text); }
+      else if (d.type==='end'){ toMenu(); }
+    });
+    conn.on('close', () => { if (app.state!=='menu') toMenu(); });
+  });
+  peer.on('error', e => { netStatus.textContent='加入失败：'+e.type; });
+}
+
+/* ========== 游戏一：坦克对战 ========== */
+const TANK_SIZE = 30, TANK_SPEED = 2.2, BULLET_SPEED = 6;
+// 地形：# 钢墙(不可毁) · B 砖墙(可毁) · W 水面(挡车不挡弹) · G 草丛(可藏身) · I 冰面(打滑)
+const TANK_MAPS = [
+  [
+   "#############",
+   "#           #",
+   "#B B  G  B B#",
+   "#           #",
+   "#  #  W  #  #",
+   "#   B   B   #",
+   "#  B  W  B  #",
+   "#   B   B   #",
+   "#  #  W  #  #",
+   "#           #",
+   "#B B  G  B B#",
+   "#           #",
+   "#############",
+  ],
+  [
+   "#############",
+   "#           #",
+   "# I   B   I #",
+   "#           #",
+   "# B # W # B #",
+   "#   G   G   #",
+   "# W B W B W #",
+   "#   G   G   #",
+   "# B # W # B #",
+   "#           #",
+   "# I   B   I #",
+   "#           #",
+   "#############",
+  ],
+];
+function tileAt(map, x, y){
+  const tx=Math.floor(x/40), ty=Math.floor(y/40);
+  if (tx<0||ty<0||tx>=13||ty>=13) return '#';
+  return map[ty][tx];
+}
+function tankBlocked(map, x, y){ const t=tileAt(map,x,y); return t==='#'||t==='B'||t==='W'; }
 function drawTank(x, y, dir, color){
-  const s = TANK_SIZE;
-  ctx.save(); ctx.translate(x+s/2, y+s/2); ctx.rotate(dir*Math.PI/2);
+  const s=TANK_SIZE;
+  ctx.save(); ctx.translate(x+s/2,y+s/2); ctx.rotate(dir*Math.PI/2);
   ctx.fillStyle='rgba(0,0,0,.35)'; ctx.fillRect(-s/2,-s/2,s/2-3,s); ctx.fillRect(3,-s/2,s/2-3,s);
   ctx.fillStyle=color; ctx.fillRect(-s/2+2,-s/2+2,s-4,s-4);
   ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(-6,-6,12,12);
   ctx.fillStyle='#222'; ctx.fillRect(-2,-s/2-7,4,9);
   ctx.restore();
 }
-function drawBrickRect(w){ ctx.fillStyle='#a4552d'; ctx.fillRect(w.x,w.y,w.w,w.h); ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.strokeRect(w.x,w.y,w.w,w.h); }
+function drawTile(c, x, y){
+  if (c==='B'){ ctx.fillStyle='#a4552d'; ctx.fillRect(x,y,40,40); ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.strokeRect(x,y,40,40); ctx.beginPath(); ctx.moveTo(x,y+20); ctx.lineTo(x+40,y+20); ctx.moveTo(x+20,y); ctx.lineTo(x+20,y+40); ctx.stroke(); }
+  else if (c==='#'){ ctx.fillStyle='#8a97a5'; ctx.fillRect(x,y,40,40); ctx.fillStyle='#6b7783'; ctx.fillRect(x+4,y+4,32,32); ctx.fillStyle='#9aa7b5'; ctx.fillRect(x+2,y+2,36,8); ctx.fillRect(x+2,y+30,36,8); }
+  else if (c==='W'){ const t=FRAME%40, off=t<20?t:40-t; ctx.fillStyle='#1a4a6b'; ctx.fillRect(x,y,40,40); ctx.fillStyle='rgba(255,255,255,.25)'; ctx.fillRect(x+6+off/2,y+10,12,3); ctx.fillRect(x+18+off/2,y+24,12,3); }
+  else if (c==='I'){ ctx.fillStyle='#bfe8f0'; ctx.fillRect(x,y,40,40); ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.strokeRect(x+2,y+2,36,36); ctx.beginPath(); ctx.moveTo(x+8,y+22); ctx.lineTo(x+20,y+8); ctx.lineTo(x+32,y+28); ctx.stroke(); }
+  else if (c==='G'){ ctx.fillStyle='#1f5a26'; ctx.fillRect(x,y,40,40); ctx.fillStyle='#2f7a36'; for(let i=0;i<6;i++){ ctx.beginPath(); ctx.arc(x+8+((i*13)%28), y+8+((i*17)%28), 5, 0, 7); ctx.fill(); } }
+}
 function drawBullet(b){ ctx.fillStyle='#fff'; ctx.fillRect(b.x,b.y,4,4); }
+const POWERUP_STYLE = { shield:{c:'#5ad0ff',ch:'🛡'}, rapid:{c:'#ffd23f',ch:'⚡'}, speed:{c:'#7eff7e',ch:'💨'} };
+function drawPowerup(p){ const s=POWERUP_STYLE[p.type]; ctx.fillStyle=s.c; ctx.fillRect(p.x,p.y,20,20); ctx.strokeStyle='#fff'; ctx.strokeRect(p.x,p.y,20,20); ctx.fillStyle='#111'; ctx.font='11px system-ui'; ctx.textAlign='center'; ctx.fillText(s.ch, p.x+10, p.y+15); ctx.textAlign='left'; }
 
 const TankGame = {
   title:'🛡️ 坦克对战', win:7,
   init(n){
-    this.n = n; this.scores = Array(n).fill(0); this.winner = null; this.round = 1; fx.length = 0;
+    this.n=n; this.scores=Array(n).fill(0); this.winner=null; this.round=1; this.mapIndex=0; fx.length=0;
     this.newRound();
   },
   newRound(){
-    this.walls = tankBricks(); this.bullets = []; this.tanks = [];
-    const sp = [[90,90],[W-90-TANK_SIZE,90],[90,H-90-TANK_SIZE],[W-90-TANK_SIZE,H-90-TANK_SIZE]];
-    for (let i=0;i<this.n;i++) this.tanks.push({i, x:sp[i][0], y:sp[i][1], dir:0, color:PLAYER_COLORS[i], alive:true, cd:0});
+    this.map = TANK_MAPS[this.mapIndex % TANK_MAPS.length].map(r=>r);
+    this.mapIndex++;
+    this.bullets=[]; this.powerups=[]; this.tanks=[];
+    const sp=[[90,90],[W-90-TANK_SIZE,90],[90,H-90-TANK_SIZE],[W-90-TANK_SIZE,H-90-TANK_SIZE]];
+    for (let i=0;i<this.n;i++) this.tanks.push({i,x:sp[i][0],y:sp[i][1],dir:0,color:PLAYER_COLORS[i],alive:true,cd:0,shield:false,rapid:0,speedT:0});
   },
   collides(t){
-    const m = 8;
-    if (t.x<m || t.y<m || t.x+TANK_SIZE>W-m || t.y+TANK_SIZE>H-m) return true;
-    for (const w of this.walls) if (rectOverlap(t.x,t.y,TANK_SIZE,TANK_SIZE,w.x,w.y,w.w,w.h)) return true;
-    for (const o of this.tanks) if (o!==t && o.alive && rectOverlap(t.x,t.y,TANK_SIZE,TANK_SIZE,o.x,o.y,TANK_SIZE,TANK_SIZE)) return true;
+    const m=8, s=TANK_SIZE, x0=t.x+m, y0=t.y+m, x1=t.x+s-m, y1=t.y+s-m;
+    if (x0<0||y0<0||x1>W||y1>H) return true;
+    for (const [px,py] of [[x0,y0],[x1,y0],[x0,y1],[x1,y1]]) if (tankBlocked(this.map,px,py)) return true;
+    for (const o of this.tanks) if (o!==t && o.alive && rectOverlap(t.x,t.y,s,s,o.x,o.y,s,s)) return true;
     return false;
   },
   move(t, dir){
-    const d = [[0,-1],[1,0],[0,1],[-1,0]][dir];
-    t.x += d[0]*TANK_SPEED; if (this.collides(t)) t.x -= d[0]*TANK_SPEED;
-    t.y += d[1]*TANK_SPEED; if (this.collides(t)) t.y -= d[1]*TANK_SPEED;
+    const d=[[0,-1],[1,0],[0,1],[-1,0]][dir], sp=TANK_SPEED*(t.speedT>0?1.5:1);
+    t.x+=d[0]*sp; if (this.collides(t)) t.x-=d[0]*sp;
+    t.y+=d[1]*sp; if (this.collides(t)) t.y-=d[1]*sp;
   },
+  onIce(t){ return tileAt(this.map, t.x+TANK_SIZE/2, t.y+TANK_SIZE/2)==='I'; },
   shoot(t){
-    const d = [[0,-1],[1,0],[0,1],[-1,0]][t.dir];
-    const cx = t.x+TANK_SIZE/2, cy = t.y+TANK_SIZE/2;
+    const d=[[0,-1],[1,0],[0,1],[-1,0]][t.dir];
+    const cx=t.x+TANK_SIZE/2, cy=t.y+TANK_SIZE/2;
     this.bullets.push({x:cx-2+d[0]*(TANK_SIZE/2+2), y:cy-2+d[1]*(TANK_SIZE/2+2), dx:d[0]*BULLET_SPEED, dy:d[1]*BULLET_SPEED, owner:t.i});
     beep(660,0.06,'square',0.03);
   },
   update(){
     for (const t of this.tanks){
       if (!t.alive) continue;
-      const k = input[t.i];
+      const k=input[t.i], ice=this.onIce(t);
       if (k.up) t.dir=0; else if (k.down) t.dir=2; else if (k.left) t.dir=3; else if (k.right) t.dir=1;
-      if (k.up||k.down||k.left||k.right) this.move(t, t.dir);
-      t.cd = Math.max(0, t.cd-1);
-      if (k.fire && t.cd===0){ this.shoot(t); t.cd=14; }
-    }
-    for (const b of this.bullets){
-      b.x += b.dx; b.y += b.dy;
-      for (let i=this.walls.length-1;i>=0;i--){
-        const w = this.walls[i];
-        if (rectOverlap(b.x,b.y,4,4,w.x,w.y,w.w,w.h)){ this.walls.splice(i,1); b.dead=true; break; }
+      if (ice || k.up||k.down||k.left||k.right) this.move(t, t.dir);
+      t.cd=Math.max(0,t.cd-1); t.rapid=Math.max(0,t.rapid-1); t.speedT=Math.max(0,t.speedT-1);
+      if (k.fire && t.cd===0){ this.shoot(t); t.cd = t.rapid>0 ? 7 : 14; }
+      // 捡道具
+      for (const p of this.powerups){
+        if (!p.dead && rectOverlap(t.x,t.y,TANK_SIZE,TANK_SIZE,p.x,p.y,20,20)){
+          if (p.type==='shield') t.shield=true; else if (p.type==='rapid') t.rapid=600; else t.speedT=600;
+          p.dead=true; beep(880,0.08,'square',0.05);
+        }
       }
+    }
+    this.powerups=this.powerups.filter(p=>!p.dead);
+    for (const b of this.bullets){
+      b.x+=b.dx; b.y+=b.dy;
+      const c=tileAt(this.map, b.x+2, b.y+2);
+      if (c==='B'){
+        const tx=Math.floor((b.x+2)/40), ty=Math.floor((b.y+2)/40);
+        const row=this.map[ty].split(''); row[tx]=' '; this.map[ty]=row.join('');
+        if (Math.random()<0.25){ const ty2=['shield','rapid','speed'][Math.floor(Math.random()*3)]; this.powerups.push({x:tx*40+10, y:ty*40+10, type:ty2}); }
+        b.dead=true;
+      } else if (c==='#'){ b.dead=true; }
       if (b.dead) continue;
       for (const t of this.tanks){
         if (!t.alive || t.i===b.owner) continue;
         if (rectOverlap(b.x,b.y,4,4,t.x,t.y,TANK_SIZE,TANK_SIZE)){
-          t.alive=false; b.dead=true; boom(t.x+TANK_SIZE/2, t.y+TANK_SIZE/2, t.color); beep(140,0.3,'sawtooth',0.08); break;
+          if (t.shield){ t.shield=false; } else { t.alive=false; boom(t.x+TANK_SIZE/2,t.y+TANK_SIZE/2,t.color); beep(140,0.3,'sawtooth',0.08); }
+          b.dead=true; break;
         }
       }
       if (b.dead) continue;
-      if (b.x<-4 || b.y<-4 || b.x>W+4 || b.y>H+4) b.dead=true;
+      if (b.x<-4||b.y<-4||b.x>W+4||b.y>H+4) b.dead=true;
     }
-    this.bullets = this.bullets.filter(b => !b.dead);
-    const alive = this.tanks.filter(t => t.alive);
-    if (alive.length <= 1){
-      if (alive.length === 1) this.scores[alive[0].i]++;
-      const w = this.scores.findIndex(s => s >= this.win);
-      if (w >= 0){ this.winner = w; finish(this.title, this.resultText(w)); }
+    this.bullets=this.bullets.filter(b=>!b.dead);
+    const alive=this.tanks.filter(t=>t.alive);
+    if (alive.length<=1){
+      if (alive.length===1) this.scores[alive[0].i]++;
+      const w=this.scores.findIndex(s=>s>=this.win);
+      if (w>=0){ this.winner=w; finish(this.title, this.resultText(w)); }
       else { this.round++; this.newRound(); }
     }
   },
   resultText(w){
-    let s = '';
-    for (let i=0;i<this.n;i++) s += (i===w?'🏆 ':'') + PLAYER_NAMES[i] + '：' + this.scores[i] + ' 分\n';
-    return PLAYER_NAMES[w] + ' 率先拿到 ' + this.win + ' 分获胜！\n' + s;
+    let s='';
+    for (let i=0;i<this.n;i++) s+=(i===w?'🏆 ':'')+PLAYER_NAMES[i]+'：'+this.scores[i]+' 分\n';
+    return PLAYER_NAMES[w]+' 率先拿到 '+this.win+' 分获胜！\n'+s;
+  },
+  serialize(){
+    return {
+      map:this.map,
+      tanks:this.tanks.map(t=>({i:t.i,x:t.x,y:t.y,dir:t.dir,alive:t.alive,sh:t.shield})),
+      bullets:this.bullets.map(b=>({x:b.x,y:b.y})),
+      powerups:this.powerups.map(p=>({x:p.x,y:p.y,ty:p.type})),
+      scores:this.scores,
+    };
+  },
+  applyState(s){
+    this.map=s.map; this.scores=s.scores;
+    this.tanks=s.tanks.map(t=>({i:t.i,x:t.x,y:t.y,dir:t.dir,alive:t.alive,color:PLAYER_COLORS[t.i],shield:t.sh,cd:0}));
+    this.bullets=s.bullets.map(b=>({x:b.x,y:b.y}));
+    this.powerups=s.powerups.map(p=>({x:p.x,y:p.y,type:p.ty}));
   },
   draw(){
     ctx.fillStyle='#0b0b0b'; ctx.fillRect(0,0,W,H);
-    for (const w of this.walls) drawBrickRect(w);
+    for (let ty=0;ty<13;ty++) for (let tx=0;tx<13;tx++){ const c=this.map[ty][tx]; if (c!=='G') drawTile(c,tx*40,ty*40); }
+    for (const p of this.powerups) drawPowerup(p);
     for (const b of this.bullets) drawBullet(b);
-    for (const t of this.tanks) if (t.alive) drawTank(t.x,t.y,t.dir,t.color);
+    for (const t of this.tanks) if (t.alive){ drawTank(t.x,t.y,t.dir,t.color); if (t.shield){ ctx.strokeStyle='#5ad0ff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(t.x+TANK_SIZE/2,t.y+TANK_SIZE/2,TANK_SIZE/2+4,0,7); ctx.stroke(); } }
+    for (let ty=0;ty<13;ty++) for (let tx=0;tx<13;tx++) if (this.map[ty][tx]==='G') drawTile('G',tx*40,ty*40);
     this.drawHUD();
   },
   drawHUD(){
     ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(0,0,W,26);
-    let x = 10;
-    for (let i=0;i<this.n;i++){
-      ctx.fillStyle=PLAYER_COLORS[i]; ctx.fillRect(x,8,10,10);
-      ctx.fillStyle='#fff'; ctx.font='12px system-ui'; ctx.fillText(this.scores[i], x+14, 17);
-      x += 34;
-    }
+    let x=10;
+    for (let i=0;i<this.n;i++){ ctx.fillStyle=PLAYER_COLORS[i]; ctx.fillRect(x,8,10,10); ctx.fillStyle='#fff'; ctx.font='12px system-ui'; ctx.fillText(this.scores[i],x+14,17); x+=34; }
   }
 };
 
-/* ========== 游戏二：桌球足球（1v1 / 2v2） ========== */
+/* ========== 游戏二：桌球足球 ========== */
 const SoccerGame = {
   title:'⚽ 桌球足球', win:5,
   init(n){
-    this.n = (n === 3) ? 2 : n;
-    this.teams = (this.n === 2) ? [0,1] : [0,0,1,1];
-    this.score = [0,0]; this.winner = null; fx.length = 0;
+    this.n=(n===3)?2:n;
+    this.teams=(this.n===2)?[0,1]:[0,0,1,1];
+    this.score=[0,0]; this.winner=null; fx.length=0;
     this.reset();
   },
   reset(){
-    this.ball = {x:W/2, y:H/2, vx:0, vy:0, r:11};
-    this.players = [];
+    this.ball={x:W/2,y:H/2,vx:0,vy:0,r:11};
+    this.players=[];
     for (let i=0;i<this.n;i++){
-      const left = this.teams[i] === 0, r = 16;
-      const x = left ? W*0.28 : W*0.72;
+      const left=this.teams[i]===0, r=16, x=left?W*0.28:W*0.72;
       let y;
-      if (this.n === 2) y = H/2;
-      else { const j = i<2 ? i : i-2; y = (j===0) ? H*0.32 : H*0.68; }
-      this.players.push({i, x, y, r, color:PLAYER_COLORS[i], left});
+      if (this.n===2) y=H/2; else { const j=i<2?i:i-2; y=(j===0)?H*0.32:H*0.68; }
+      this.players.push({i,x,y,r,color:PLAYER_COLORS[i],left});
     }
   },
   update(){
     for (const p of this.players){
-      const k = input[p.i];
-      let dx = (k.right?1:0) - (k.left?1:0), dy = (k.down?1:0) - (k.up?1:0);
-      if (dx || dy){ const l = Math.hypot(dx,dy); p.x += dx/l*3; p.y += dy/l*3; }
-      if (p.left) p.x = Math.max(8, Math.min(W/2 - p.r, p.x));
-      else p.x = Math.max(W/2 + p.r, Math.min(W-8, p.x));
-      p.y = Math.max(p.r, Math.min(H - p.r, p.y));
+      const k=input[p.i];
+      let dx=(k.right?1:0)-(k.left?1:0), dy=(k.down?1:0)-(k.up?1:0);
+      if (dx||dy){ const l=Math.hypot(dx,dy); p.x+=dx/l*3; p.y+=dy/l*3; }
+      if (p.left) p.x=Math.max(8,Math.min(W/2-p.r,p.x)); else p.x=Math.max(W/2+p.r,Math.min(W-8,p.x));
+      p.y=Math.max(p.r,Math.min(H-p.r,p.y));
       this.kick(p);
     }
-    const b = this.ball;
-    b.x += b.vx; b.y += b.vy; b.vx *= 0.985; b.vy *= 0.985;
-    if (b.y < b.r){ b.y = b.r; b.vy *= -0.85; }
-    if (b.y > H - b.r){ b.y = H - b.r; b.vy *= -0.85; }
-    const g0 = H/2 - 70, g1 = H/2 + 70;
-    if (b.x < b.r){
-      if (b.y > g0 && b.y < g1){ if (b.x < -b.r) return this.goal(1); }
-      else { b.x = b.r; b.vx *= -0.85; }
-    }
-    if (b.x > W - b.r){
-      if (b.y > g0 && b.y < g1){ if (b.x > W + b.r) return this.goal(0); }
-      else { b.x = W - b.r; b.vx *= -0.85; }
-    }
+    const b=this.ball;
+    b.x+=b.vx; b.y+=b.vy; b.vx*=0.985; b.vy*=0.985;
+    if (b.y<b.r){ b.y=b.r; b.vy*=-0.85; }
+    if (b.y>H-b.r){ b.y=H-b.r; b.vy*=-0.85; }
+    // 中央柱
+    const px=W/2, py=H/2, pr=14, pd=Math.hypot(b.x-px,b.y-py);
+    if (pd<pr+b.r && pd>0.001){ const nx=(b.x-px)/pd, ny=(b.y-py)/pd; b.x=px+nx*(pr+b.r); b.y=py+ny*(pr+b.r); const dot=b.vx*nx+b.vy*ny; if (dot<0){ b.vx-=2*dot*nx; b.vy-=2*dot*ny; } }
+    const g0=H/2-70, g1=H/2+70;
+    if (b.x<b.r){ if (b.y>g0&&b.y<g1){ if (b.x<-b.r) return this.goal(1); } else { b.x=b.r; b.vx*=-0.85; } }
+    if (b.x>W-b.r){ if (b.y>g0&&b.y<g1){ if (b.x>W+b.r) return this.goal(0); } else { b.x=W-b.r; b.vx*=-0.85; } }
   },
   kick(p){
-    const b = this.ball, d = Math.hypot(b.x-p.x, b.y-p.y), min = p.r + b.r;
-    if (d < min && d > 0.001){
-      const nx = (b.x-p.x)/d, ny = (b.y-p.y)/d;
-      b.x = p.x + nx*min; b.y = p.y + ny*min;
-      b.vx = nx*7; b.vy = ny*7;
-    }
+    const b=this.ball, d=Math.hypot(b.x-p.x,b.y-p.y), min=p.r+b.r;
+    if (d<min && d>0.001){ const nx=(b.x-p.x)/d, ny=(b.y-p.y)/d; b.x=p.x+nx*min; b.y=p.y+ny*min; b.vx=nx*7; b.vy=ny*7; }
   },
   goal(team){
     this.score[team]++; beep(520,0.2,'square',0.05);
-    if (this.score[team] >= this.win){ this.winner = team; finish(this.title, this.resultText()); }
+    if (this.score[team]>=this.win){ this.winner=team; finish(this.title, this.resultText()); }
     else this.reset();
   },
   resultText(){
-    const w = this.winner === 0 ? (this.n===2 ? PLAYER_NAMES[0] : '左队') : (this.n===2 ? PLAYER_NAMES[1] : '右队');
-    return w + ' 率先拿到 ' + this.win + ' 分获胜！\n左 ' + this.score[0] + ' : ' + this.score[1] + ' 右';
+    const w=this.winner===0?(this.n===2?PLAYER_NAMES[0]:'左队'):(this.n===2?PLAYER_NAMES[1]:'右队');
+    return w+' 率先拿到 '+this.win+' 分获胜！\n左 '+this.score[0]+' : '+this.score[1]+' 右';
+  },
+  serialize(){ return {ball:{x:this.ball.x,y:this.ball.y}, players:this.players.map(p=>({i:p.i,x:p.x,y:p.y})), score:this.score}; },
+  applyState(s){
+    this.ball.x=s.ball.x; this.ball.y=s.ball.y; this.score=s.score;
+    for (const p of s.players){ const o=this.players[p.i]; if (o){ o.x=p.x; o.y=p.y; } }
   },
   draw(){
     ctx.fillStyle='#0d2810'; ctx.fillRect(0,0,W,H);
@@ -308,6 +468,7 @@ const SoccerGame = {
     ctx.beginPath(); ctx.moveTo(W/2,2); ctx.lineTo(W/2,H-2); ctx.stroke();
     ctx.beginPath(); ctx.arc(W/2,H/2,52,0,7); ctx.stroke();
     ctx.fillStyle='rgba(255,255,255,.9)'; ctx.fillRect(0,H/2-70,10,140); ctx.fillRect(W-10,H/2-70,10,140);
+    ctx.fillStyle='#5a6a7a'; ctx.beginPath(); ctx.arc(W/2,H/2,14,0,7); ctx.fill(); ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.stroke();
     for (const p of this.players){ ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill(); ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=2; ctx.stroke(); }
     ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(this.ball.x,this.ball.y,this.ball.r,0,7); ctx.fill();
     ctx.strokeStyle='#999'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(this.ball.x,this.ball.y,this.ball.r*0.5,0,7); ctx.stroke();
@@ -318,60 +479,78 @@ const SoccerGame = {
     ctx.fillStyle=PLAYER_COLORS[0]; ctx.fillRect(W/2-70,8,10,10);
     ctx.fillStyle=PLAYER_COLORS[1]; ctx.fillRect(W/2+60,8,10,10);
     ctx.fillStyle='#fff'; ctx.font='bold 14px system-ui'; ctx.textAlign='center';
-    ctx.fillText(this.score[0] + ' : ' + this.score[1], W/2, 18);
+    ctx.fillText(this.score[0]+' : '+this.score[1], W/2, 18);
     ctx.textAlign='left';
   }
 };
 
-/* ========== 游戏三：赛车（3 圈） ========== */
+/* ========== 游戏三：赛车 ========== */
 const RaceGame = {
   title:'🏎️ 赛车', laps:3,
   init(n){
-    this.n = n; this.winner = null; fx.length = 0; this.cars = [];
-    const st = [[W/2-45,H-70],[W/2+45,H-70],[W/2-45,H-35],[W/2+45,H-35]];
-    for (let i=0;i<n;i++) this.cars.push({i, x:st[i][0], y:st[i][1], a:-Math.PI/2, v:0, lap:0, canLap:false, color:PLAYER_COLORS[i]});
-    this.island = {x:150, y:150, w:220, h:220};
+    this.n=n; this.winner=null; fx.length=0; this.cars=[];
+    const st=[[W/2-45,H-70],[W/2+45,H-70],[W/2-45,H-35],[W/2+45,H-35]];
+    for (let i=0;i<n;i++) this.cars.push({i,x:st[i][0],y:st[i][1],a:-Math.PI/2,v:0,lap:0,canLap:false,color:PLAYER_COLORS[i]});
+    this.island={x:150,y:150,w:220,h:220};
+    this.boosts=[{x:10,y:44,w:W-20,h:26},{x:10,y:H-70,w:W-20,h:26}];   // 上下加速带
+    this.tires=[{x:W*0.28,y:H*0.42},{x:W*0.72,y:H*0.42},{x:W*0.28,y:H*0.58},{x:W*0.72,y:H*0.58}]; // 轮胎障碍
   },
   update(){
     for (const c of this.cars){
-      const k = input[c.i];
-      if (k.left) c.a -= 0.055;
-      if (k.right) c.a += 0.055;
-      if (k.up) c.v += 0.18; else if (k.down) c.v -= 0.25; else c.v *= 0.985;
-      c.v = Math.max(-2, Math.min(4.2, c.v));
-      c.x += Math.cos(c.a)*c.v; c.y += Math.sin(c.a)*c.v;
+      const k=input[c.i];
+      if (k.left) c.a-=0.055;
+      if (k.right) c.a+=0.055;
+      if (k.up) c.v+=0.18; else if (k.down) c.v-=0.25; else c.v*=0.985;
+      c.v=Math.max(-2,Math.min(4.2,c.v));
+      // 加速带
+      for (const b of this.boosts) if (c.x>b.x&&c.x<b.x+b.w&&c.y>b.y&&c.y<b.y+b.h) c.v=Math.max(c.v,4.6);
+      c.x+=Math.cos(c.a)*c.v; c.y+=Math.sin(c.a)*c.v;
       this.collide(c);
-      if (c.y < 30 && c.canLap){ c.lap++; c.canLap=false; beep(880,0.08,'square',0.05); if (c.lap >= this.laps) this.endRace(); }
-      if (c.y > H-30) c.canLap = true;
+      if (c.y<30 && c.canLap){ c.lap++; c.canLap=false; beep(880,0.08,'square',0.05); if (c.lap>=this.laps) this.endRace(); }
+      if (c.y>H-30) c.canLap=true;
     }
   },
   collide(c){
-    const r = 13;
-    if (c.x < r){ c.x = r; c.v *= -0.4; }
-    if (c.x > W-r){ c.x = W-r; c.v *= -0.4; }
-    if (c.y < r){ c.y = r; c.v *= -0.4; }
-    if (c.y > H-r){ c.y = H-r; c.v *= -0.4; }
-    const I = this.island, L = I.x-r, R = I.x+I.w+r, T = I.y-r, B = I.y+I.h+r;
-    if (c.x>L && c.x<R && c.y>T && c.y<B){
+    const r=13;
+    if (c.x<r){ c.x=r; c.v*=-0.4; } if (c.x>W-r){ c.x=W-r; c.v*=-0.4; }
+    if (c.y<r){ c.y=r; c.v*=-0.4; } if (c.y>H-r){ c.y=H-r; c.v*=-0.4; }
+    const I=this.island, L=I.x-r, R=I.x+I.w+r, T=I.y-r, B=I.y+I.h+r;
+    if (c.x>L&&c.x<R&&c.y>T&&c.y<B){
       const dl=c.x-L, dr=R-c.x, dt=c.y-T, db=B-c.y, m=Math.min(dl,dr,dt,db);
       if (m===dl) c.x=L; else if (m===dr) c.x=R; else if (m===dt) c.y=T; else c.y=B;
-      c.v *= -0.4;
+      c.v*=-0.4;
+    }
+    for (const tire of this.tires){
+      const d=Math.hypot(c.x-tire.x,c.y-tire.y);
+      if (d<r+12){ const nx=(c.x-tire.x)/d, ny=(c.y-tire.y)/d; c.x=tire.x+nx*(r+12); c.y=tire.y+ny*(r+12); c.v*=-0.3; }
     }
   },
   endRace(){
-    if (this.winner !== null) return;
-    const sorted = [...this.cars].sort((a,b) => b.lap - a.lap || b.y - a.y);
-    this.winner = sorted[0].i;
-    let s = '';
-    sorted.forEach((c,idx) => { s += (idx===0?'🏆 ':'') + PLAYER_NAMES[c.i] + '：' + Math.min(c.lap,this.laps) + ' 圈\n'; });
-    finish(this.title, PLAYER_NAMES[this.winner] + ' 率先完成 ' + this.laps + ' 圈！\n' + s);
+    if (this.winner!==null) return;
+    const sorted=[...this.cars].sort((a,b)=>b.lap-a.lap||b.y-a.y);
+    this.winner=sorted[0].i;
+    let s='';
+    sorted.forEach((c,idx)=>{ s+=(idx===0?'🏆 ':'')+PLAYER_NAMES[c.i]+'：'+Math.min(c.lap,this.laps)+' 圈\n'; });
+    finish(this.title, PLAYER_NAMES[this.winner]+' 率先完成 '+this.laps+' 圈！\n'+s);
   },
+  serialize(){ return {cars:this.cars.map(c=>({i:c.i,x:c.x,y:c.y,a:c.a,lap:c.lap}))}; },
+  applyState(s){ for (const c of s.cars){ const o=this.cars[c.i]; if (o){ o.x=c.x; o.y=c.y; o.a=c.a; o.lap=c.lap; } } },
   draw(){
     ctx.fillStyle='#122a12'; ctx.fillRect(0,0,W,H);
     ctx.strokeStyle='rgba(255,255,255,.3)'; ctx.lineWidth=3; ctx.strokeRect(10,10,W-20,H-20);
-    const I = this.island;
+    const I=this.island;
     ctx.fillStyle='#0b1c0b'; ctx.fillRect(I.x,I.y,I.w,I.h);
     ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.strokeRect(I.x,I.y,I.w,I.h);
+    // 加速带
+    ctx.fillStyle='rgba(255,210,63,.25)';
+    for (const b of this.boosts) ctx.fillRect(b.x,b.y,b.w,b.h);
+    ctx.strokeStyle='#ffd23f'; ctx.setLineDash([8,8]);
+    for (const b of this.boosts){ ctx.strokeRect(b.x,b.y,b.w,b.h); }
+    ctx.setLineDash([]);
+    // 轮胎障碍
+    ctx.fillStyle='#222'; ctx.strokeStyle='#555'; ctx.lineWidth=2;
+    for (const t of this.tires){ ctx.beginPath(); ctx.arc(t.x,t.y,12,0,7); ctx.fill(); ctx.stroke(); ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(t.x,t.y,5,0,7); ctx.fill(); ctx.fillStyle='#222'; }
+    // 终点线 / 检查线
     ctx.fillStyle='#fff';
     for (let x=0;x<W;x+=24) ctx.fillRect(x,26,12,6);
     ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.setLineDash([10,10]);
@@ -388,12 +567,8 @@ const RaceGame = {
   },
   drawHUD(){
     ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(0,0,W,26);
-    let x = 10;
-    for (let i=0;i<this.n;i++){
-      ctx.fillStyle=PLAYER_COLORS[i]; ctx.fillRect(x,8,10,10);
-      ctx.fillStyle='#fff'; ctx.font='12px system-ui'; ctx.fillText(Math.min(this.cars[i].lap,this.laps)+'/'+this.laps, x+14, 17);
-      x += 44;
-    }
+    let x=10;
+    for (let i=0;i<this.n;i++){ ctx.fillStyle=PLAYER_COLORS[i]; ctx.fillRect(x,8,10,10); ctx.fillStyle='#fff'; ctx.font='12px system-ui'; ctx.fillText(Math.min(this.cars[i].lap,this.laps)+'/'+this.laps,x+14,17); x+=44; }
   }
 };
 
@@ -401,17 +576,21 @@ const RaceGame = {
 const GAMES = { tank:TankGame, soccer:SoccerGame, race:RaceGame };
 let chosenPlayers = 2;
 document.querySelectorAll('.pcount button').forEach(btn => {
-  btn.onclick = () => {
-    chosenPlayers = +btn.dataset.p;
-    document.querySelectorAll('.pcount button').forEach(b => b.classList.toggle('on', b === btn));
-  };
+  btn.onclick = () => { chosenPlayers=+btn.dataset.p; document.querySelectorAll('.pcount button').forEach(b=>b.classList.toggle('on', b===btn)); };
 });
 document.querySelectorAll('.game').forEach(btn => {
-  btn.onclick = () => { app.players = chosenPlayers; startGame(btn.dataset.game); };
+  btn.onclick = () => { app.players=chosenPlayers; startGame(btn.dataset.game); };
 });
+document.querySelectorAll('.ogame').forEach(btn => {
+  btn.onclick = () => { onlineGame=btn.dataset.game; document.querySelectorAll('.ogame').forEach(b=>b.classList.toggle('on', b===btn)); };
+});
+document.getElementById('onlineBtn').onclick = () => { hide(menuEl); show(onlineEl); netStatus.textContent=''; };
+document.getElementById('onlineBack').onclick = () => { if (app.state!=='playing') cleanupNet(); hide(onlineEl); show(menuEl); };
+document.getElementById('hostBtn').onclick = () => startHost();
+document.getElementById('joinBtn').onclick = () => { const c=document.getElementById('joinCode').value.trim(); if (c) joinRoom(c); };
 document.getElementById('backBtn').onclick = toMenu;
 document.getElementById('menuBtn').onclick = toMenu;
-document.getElementById('againBtn').onclick = () => { if (lastGame) startGame(lastGame); };
+againBtn.onclick = () => { if (!role && lastGame) startGame(lastGame); };
 
 function drawMenuBg(){
   ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,W,H);
@@ -420,15 +599,21 @@ function drawMenuBg(){
   for (let y=0;y<H;y+=40){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
 }
 function tick(){
-  if (app.state === 'playing' && app.game){
-    app.game.update();
-    updateFx();
-    app.game.draw();
-    drawFx();
-  } else if (app.state === 'menu'){
+  FRAME++;
+  if (app.state==='playing' && app.game){
+    if (role==='guest'){
+      if (remoteState) app.game.applyState(remoteState);
+      app.game.draw();
+    } else {
+      if (role==='host'){ const r=input[1], k=remoteKeys; r.up=k.up; r.down=k.down; r.left=k.left; r.right=k.right; r.fire=k.fire; }
+      app.game.update();
+      updateFx();
+      app.game.draw();
+      drawFx();
+    }
+  } else if (app.state==='menu'){
     drawMenuBg();
   }
-  // result 状态：保持上一帧画面
 }
 // 固定 60 步/秒：适配高刷屏，避免倍速
 const STEP_MS = 1000/60;
