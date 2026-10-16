@@ -60,6 +60,7 @@
       <button class="game" data-game="soccer">⚽ 桌球足球</button>
       <button class="game" data-game="race">🏎️ 赛车</button>
       <button class="game" data-game="adventure">🎮 横版闯关</button>
+      <button class="game" data-game="championship">🏆 竞技赛</button>
     </div>
     <div class="pcount">
       <span>人数</span>
@@ -181,7 +182,7 @@ function updateFx(){ for (const f of fx){ if(f.type==='p'){ f.x+=f.vx; f.y+=f.vy
 function drawFx(){ for (const f of fx){ ctx.globalAlpha=f.life/f.max; if(f.type==='ring'){ ctx.strokeStyle=f.color; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,7); ctx.stroke(); } else { ctx.fillStyle=f.color; ctx.fillRect(f.x-f.r,f.y-f.r,f.r*2,f.r*2); } } ctx.globalAlpha=1; }
 
 /* ========== 应用状态 / 菜单 ========== */
-const app = { state:'menu', game:null, players:2, bots:0 };
+const app = { state:'menu', game:null, players:2, bots:0, champ:null };
 let lastGame = null, botsOn = false;
 let role = null;            // null | 'host' | 'guest'
 let peer = null, conn = null, netTimer = null, remoteState = null;
@@ -207,6 +208,15 @@ function finish(title, text){
   if (role){ hide(againBtn); } else { show(againBtn); }
   if (role==='host') for (const c of slots) if (c && c.open) c.send({type:'result', title, text});
 }
+// 单局结束：竞技赛模式下把名次交给锦标赛，否则直接结算
+function endGame(placements, text){
+  if (app.champ){ app.champ.gameDone(placements); }
+  else { finish(app.game.title, text); }
+}
+function drawNotice(text){
+  ctx.fillStyle='rgba(0,0,0,.7)'; ctx.fillRect(0,40,W,44);
+  ctx.fillStyle='#ffd23f'; ctx.font='bold 18px system-ui'; ctx.textAlign='center'; ctx.fillText(text, W/2, 68); ctx.textAlign='left';
+}
 function cleanupNet(){
   clearInterval(netTimer);
   for (const c of slots){ try{c.close();}catch(e){} }
@@ -216,6 +226,7 @@ function cleanupNet(){
 }
 function startGame(name){
   lastGame = name;
+  app.champ = null;
   app.game = GAMES[name]; app.state = 'playing';
   app.bots = (name==='tank' && botsOn) ? Math.max(0, 4 - app.players) : 0;
   app.game.init(app.players);
@@ -225,6 +236,7 @@ function startGame(name){
 }
 function startOnline(game, r){
   role = r;
+  app.champ = null;
   app.game = GAMES[game]; app.state = 'playing';
   app.game.init(onlinePlayers);
   resetInput();
@@ -241,7 +253,7 @@ function startOnline(game, r){
 function toMenu(){
   if (role==='host') for (const c of slots) if (c && c.open) c.send({type:'end'});
   cleanupNet();
-  app.state='menu'; app.game=null; resetInput();
+  app.state='menu'; app.game=null; app.champ=null; resetInput();
   hide(hudEl); hide(resultEl); hide(onlineEl); hide(roomTag); hide(roomRow); show(menuEl);
 }
 
@@ -384,11 +396,15 @@ const TankGame = {
     for (let i=0;i<this.total;i++) this.names.push(i<n ? PLAYER_NAMES[i] : ('机器人'+(i-n+1)));
     this.scores = Array(this.total).fill(0);
     this.winner=null; this.round=1; this.mapIndex=0; fx.length=0;
+    this.mod='normal'; this.announce=null;
     this.newRound();
   },
   newRound(){
     if (Math.random() < 0.5){ this.map = randomMap(); }
     else { this.map = TANK_MAPS[this.mapIndex % TANK_MAPS.length].map(r=>r); this.mapIndex++; }
+    const r=Math.random();
+    this.mod = r<0.4 ? 'normal' : r<0.6 ? 'speed' : r<0.8 ? 'rapid' : 'reflect';
+    this.announce = this.mod==='normal' ? null : {t:100, text:{speed:'⚡ 高速模式！',rapid:'🔫 连发模式！',reflect:'🪞 无限反弹模式！'}[this.mod]};
     this.bullets=[]; this.powerups=[]; this.tanks=[];
     const sp=[[90,90],[W-90-TANK_SIZE,90],[90,H-90-TANK_SIZE],[W-90-TANK_SIZE,H-90-TANK_SIZE]];
     for (let i=0;i<this.total;i++) this.tanks.push({i,x:sp[i][0],y:sp[i][1],dir:0,a:0,vx:0,vy:0,color:PLAYER_COLORS[i],alive:true,cd:0,shield:false,rapid:0,speedT:0,ai:i>=this.n});
@@ -408,7 +424,7 @@ const TankGame = {
   bounce(b){
     b.bounces = (b.bounces || 0) + 1;
     beep(320, 0.05, 'square', 0.04);
-    if (b.bounces >= 3) b.dead = true;
+    if (b.bounces >= (this.mod==='reflect' ? 999 : 3)) b.dead = true;
   },
   shoot(t){
     const d=DIR8[t.dir];
@@ -441,13 +457,14 @@ const TankGame = {
     return k;
   },
   update(){
+    if (this.announce) this.announce.t--;
     for (const t of this.tanks){
       if (!t.alive) continue;
       const k = t.ai ? this.botInput(t) : input[t.i];
       const [mx,my] = dirVec(k);
       if (!t.ai && (mx||my)) t.dir = dirFrom(mx,my);
       const ice = this.onIce(t);
-      const sp = TANK_SPEED * (t.speedT>0?1.6:1);
+      const sp = TANK_SPEED * (this.mod==='speed'?1.5:1) * (t.speedT>0?1.6:1);
       const acc = ice ? 0.04 : 0.2;              // 冰面打滑：几乎不响应转向
       t.vx += (mx*sp - t.vx)*acc;
       t.vy += (my*sp - t.vy)*acc;
@@ -455,7 +472,7 @@ const TankGame = {
       let ny = t.y + t.vy; if (!this.collidesAt(t,t.x,ny)) t.y=ny; else t.vy=0;
       t.a = lerpAngle(t.a, t.dir*Math.PI/4, 0.28);   // 顺滑转向
       t.cd=Math.max(0,t.cd-1); t.rapid=Math.max(0,t.rapid-1); t.speedT=Math.max(0,t.speedT-1);
-      if (k.fire && t.cd===0){ this.shoot(t); t.cd = t.rapid>0 ? 7 : 14; }
+      if (k.fire && t.cd===0){ this.shoot(t); t.cd = t.rapid>0 ? 7 : (this.mod==='rapid' ? 9 : 14); }
       for (const p of this.powerups){
         if (!p.dead && rectOverlap(t.x,t.y,TANK_SIZE,TANK_SIZE,p.x,p.y,20,20)){
           if (p.type==='shield') t.shield=true; else if (p.type==='rapid') t.rapid=600; else t.speedT=600;
@@ -494,10 +511,11 @@ const TankGame = {
     if (alive.length<=1){
       if (alive.length===1) this.scores[alive[0].i]++;
       const w=this.scores.findIndex(s=>s>=this.win);
-      if (w>=0){ this.winner=w; finish(this.title, this.resultText(w)); }
+      if (w>=0){ this.winner=w; endGame(this.rank(), this.resultText(w)); }
       else { this.round++; this.newRound(); }
     }
   },
+  rank(){ return [...Array(this.total).keys()].sort((a,b)=>this.scores[b]-this.scores[a]); },
   resultText(w){
     let s='';
     for (let i=0;i<this.total;i++) s+=(i===w?'🏆 ':'')+this.names[i]+'：'+this.scores[i]+' 分\n';
@@ -526,11 +544,15 @@ const TankGame = {
     for (let ty=0;ty<13;ty++) for (let tx=0;tx<13;tx++) if (this.map[ty][tx]==='G') drawTile('G',tx*40,ty*40);
     drawFx();
     this.drawHUD();
+    if (this.announce && this.announce.t>0){ ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(0,H/2-34,W,68); ctx.fillStyle='#ffd23f'; ctx.font='bold 22px system-ui'; ctx.textAlign='center'; ctx.fillText(this.announce.text,W/2,H/2+8); ctx.textAlign='left'; }
   },
   drawHUD(){
     ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(0,0,W,26);
     let x=10;
     for (let i=0;i<this.total;i++){ ctx.fillStyle=PLAYER_COLORS[i]; ctx.fillRect(x,8,10,10); ctx.fillStyle='#fff'; ctx.font='12px system-ui'; ctx.fillText(this.scores[i],x+14,17); x+=34; }
+    const mx=Math.max(...this.scores);
+    ctx.fillStyle='#ffd23f'; ctx.font='12px system-ui'; ctx.textAlign='right';
+    ctx.fillText('第 '+this.round+' 局'+(mx>=this.win-1?' · 最后一局！':''), W-10, 17); ctx.textAlign='left';
   }
 };
 
@@ -578,8 +600,13 @@ const SoccerGame = {
   },
   goal(team){
     this.score[team]++; beep(520,0.2,'square',0.05); addShake(5);
-    if (this.score[team]>=this.win){ this.winner=team; finish(this.title, this.resultText()); }
+    if (this.score[team]>=this.win){ this.winner=team; endGame(this.placements(), this.resultText()); }
     else this.reset();
+  },
+  placements(){
+    if (this.n===2) return this.winner===0 ? [0,1] : [1,0];
+    const t0=[0,1], t1=[2,3];
+    return this.winner===0 ? t0.concat(t1) : t1.concat(t0);
   },
   resultText(){
     const w=this.winner===0?(this.n===2?PLAYER_NAMES[0]:'左队'):(this.n===2?PLAYER_NAMES[1]:'右队');
@@ -660,7 +687,7 @@ const RaceGame = {
     this.winner=sorted[0].i;
     let s='';
     sorted.forEach((c,idx)=>{ s+=(idx===0?'🏆 ':'')+PLAYER_NAMES[c.i]+'：'+Math.min(c.lap,this.laps)+' 圈\n'; });
-    finish(this.title, PLAYER_NAMES[this.winner]+' 率先完成 '+this.laps+' 圈！\n'+s);
+    endGame(sorted.map(c=>c.i), PLAYER_NAMES[this.winner]+' 率先完成 '+this.laps+' 圈！\n'+s);
   },
   serialize(){ return {cars:this.cars.map(c=>({i:c.i,x:c.x,y:c.y,a:c.a,lap:c.lap}))}; },
   applyState(s){ for (const c of s.cars){ const o=this.cars[c.i]; if (o){ o.x=c.x; o.y=c.y; o.a=c.a; o.lap=c.lap; } } },
@@ -853,8 +880,45 @@ const AdventureGame = {
   }
 };
 
+/* ========== 竞技赛（坦克 → 足球 → 赛车，累计积分） ========== */
+const Championship = {
+  title:'🏆 全游戏竞技赛',
+  init(n){
+    this.n = n;
+    this.points = Array(n).fill(0);
+    this.idx = 0;
+    this.sequence = (n===3) ? ['tank','race'] : ['tank','soccer','race'];
+    this.notice = {t:0, text:''};
+    app.champ = this;
+    this.loadGame(0);
+  },
+  loadGame(i){
+    this.idx = i;
+    app.game = GAMES[this.sequence[i]];
+    app.game.init(this.n);
+    resetInput();
+    this.notice = {t:100, text:'第 '+(i+1)+'/'+this.sequence.length+' 项：'+app.game.title};
+  },
+  gameDone(placements){
+    const pts = this.n===4 ? [4,2,1,0] : this.n===3 ? [3,2,1] : [3,1];
+    placements.forEach((p,r)=>{ if (r < pts.length) this.points[p] += pts[r]; });
+    if (this.idx+1 < this.sequence.length){ this.loadGame(this.idx+1); }
+    else {
+      let champ=0; for (let i=1;i<this.n;i++) if (this.points[i] > this.points[champ]) champ=i;
+      app.champ = null;
+      finish('🏆 竞技赛结束', this.resultText(champ));
+    }
+  },
+  resultText(champ){
+    const order = [...Array(this.n).keys()].sort((a,b)=>this.points[b]-this.points[a]);
+    let s='';
+    order.forEach((p,i)=>{ s += (i===0?'👑 ':'')+PLAYER_NAMES[p]+'：'+this.points[p]+' 分\n'; });
+    return PLAYER_NAMES[champ]+' 赢得竞技赛冠军！\n'+s;
+  }
+};
+
 /* ========== 菜单与启动 ========== */
-const GAMES = { tank:TankGame, soccer:SoccerGame, race:RaceGame, adventure:AdventureGame };
+const GAMES = { tank:TankGame, soccer:SoccerGame, race:RaceGame, adventure:AdventureGame, championship:Championship };
 let chosenPlayers = 2;
 document.querySelectorAll('#menu .pcount button').forEach(btn => {
   btn.onclick = () => { chosenPlayers=+btn.dataset.p; document.querySelectorAll('#menu .pcount button').forEach(b=>b.classList.toggle('on', b===btn)); };
@@ -900,6 +964,7 @@ function tick(){
   ctx.save(); ctx.translate(shakeX, shakeY);
   app.game.draw();
   ctx.restore();
+  if (app.champ && app.champ.notice && app.champ.notice.t>0){ app.champ.notice.t--; drawNotice(app.champ.notice.text); }
 }
 // 固定 60 步/秒：适配高刷屏，避免倍速
 const STEP_MS = 1000/60;
