@@ -181,11 +181,18 @@
   <h1>坦克大战 TANK BATTLE</h1>
 
   <div class="hud">
-    <div class="stat">得分 <b id="score">0</b></div>
-    <div class="stat">关卡 <b id="level">1</b></div>
-    <div class="stat">生命 <b id="lives">3</b></div>
-    <div class="stat">剩余敌人 <b id="enemiesLeft">0</b></div>
-    <div class="stat" id="netStat" style="display:none">联机 <b id="netInfo">-</b></div>
+    <div id="normalHud" style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;align-items:center;">
+      <div class="stat">得分 <b id="score">0</b></div>
+      <div class="stat">关卡 <b id="level">1</b></div>
+      <div class="stat">生命 <b id="lives">3</b></div>
+      <div class="stat">剩余敌人 <b id="enemiesLeft">0</b></div>
+      <div class="stat" id="netStat" style="display:none">联机 <b id="netInfo">-</b></div>
+    </div>
+    <div id="duelHud" style="display:none;gap:14px;flex-wrap:wrap;justify-content:center;align-items:center;">
+      <div class="stat" style="color:#ffcf3d">1P <b id="p1score">0</b></div>
+      <div class="stat">先到 <b id="duelTarget">5</b> 分获胜</div>
+      <div class="stat" style="color:#7ee07e">2P <b id="p2score">0</b></div>
+    </div>
   </div>
 
   <div class="stage">
@@ -197,6 +204,10 @@
 
       <div id="menuMain">
         <button class="btn" id="soloBtn">🎮 单人游戏</button>
+        <div class="join-row">
+          <button class="btn ghost" id="localBtn">👥 本地双人</button>
+          <button class="btn ghost" id="duelBtn">⚔️ 1v1 对战</button>
+        </div>
         <button class="btn" id="hostBtn">🌐 创建联机房间</button>
         <div class="join-row">
           <input id="joinInput" placeholder="输入房间码" maxlength="64" autocomplete="off" spellcheck="false">
@@ -216,9 +227,8 @@
       <button class="btn ghost small" id="cancelBtn" style="display:none">取消</button>
 
       <div class="keys" id="keysHint">
-        <div class="row"><kbd>W</kbd><kbd>↑</kbd></div>
-        <div class="row"><kbd>A</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>S</kbd><kbd>→</kbd><kbd>D</kbd></div>
-        <div class="row"><kbd class="wide">空格 · 射击</kbd></div>
+        <div class="row">1P <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> + <kbd>空格</kbd></div>
+        <div class="row">2P <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> + <kbd>Enter</kbd></div>
         <div class="row"><kbd class="wide">P · 暂停</kbd></div>
       </div>
       <button class="btn ghost small" id="soundBtn">🔊 声音：开</button>
@@ -226,7 +236,7 @@
   </div>
 
   <div class="footer">
-    用 <b>WASD / 方向键</b> 移动，<b>空格</b> 射击 · 保护下方基地 ⭐ · 联机时两位玩家各自操作一台设备
+    1P <b>WASD</b> + <b>空格</b>，2P <b>方向键</b> + <b>Enter</b> · 保护下方基地 ⭐ · 本地双人同屏对战 / 联机各操作一台设备
   </div>
 
   <div class="touch" id="touchPad">
@@ -362,10 +372,11 @@ const ENEMY_TYPES = {
 
 /* ================= 游戏状态 ================= */
 const game = {
-  mode: 'solo',               // solo | host | guest
+  mode: 'solo',               // solo | local | duel | host | guest
   state: 'menu',              // menu | playing | over
   paused: false,
   score: 0,
+  score2: 0,                  // 对战模式下 2P 的比分
   level: 1,
   lives: 3,
   enemiesLeft: 0,             // 尚未刷出的敌人数量
@@ -377,6 +388,9 @@ const game = {
   baseWallTimer: 0,           // 基地钢墙的剩余帧数
   levelBanner: 0,             // “第 N 关” 提示的剩余帧数
   enemiesKilled: 0,
+  duelRespawn: [0, 0],        // 对战模式下两玩家的重生倒计时
+  duelWinner: null,           // 对战模式胜者（0/1）
+  powerupTimer: 0,            // 对战模式道具刷新倒计时
   players: [null, null],
   enemies: [],
   bullets: [],
@@ -448,7 +462,7 @@ function makePlayer(idx) {
 
 function spawnPlayers() {
   game.players[0] = makePlayer(0);
-  game.players[1] = (game.mode === 'host') ? makePlayer(1) : null;
+  game.players[1] = (game.mode === 'host' || game.mode === 'local') ? makePlayer(1) : null;
 }
 
 function spawnEnemy() {
@@ -707,7 +721,10 @@ function applyPowerup(p, type) {
   sfx.power();
   switch (type) {
     case 'star':   p.stars = Math.min(3, p.stars + 1); break;
-    case 'bomb':   killAllEnemies(); break;
+    case 'bomb':
+      if (game.mode === 'duel') duelBomb(p);
+      else killAllEnemies();
+      break;
     case 'helmet': p.shield = 480; break;              // 8 秒无敌
     case 'life':   game.lives++; break;
     case 'timer':  game.freezeTimer = 480; break;      // 8 秒冻结敌人
@@ -769,7 +786,16 @@ function updateExplosions() {
 
 /* ================= 流程控制 ================= */
 function startSolo() {
+  cleanupNet();
   game.mode = 'solo';
+  resetGameForPlay();
+  hideOverlay();
+  updateNetStatus('');
+}
+
+function startLocal() {
+  cleanupNet();
+  game.mode = 'local';
   resetGameForPlay();
   hideOverlay();
   updateNetStatus('');
@@ -779,7 +805,7 @@ function resetGameForPlay() {
   game.level = 1;
   resetMap();
   game.score = 0;
-  game.lives = (game.mode === 'host') ? 4 : 3;
+  game.lives = (game.mode === 'host' || game.mode === 'local') ? 4 : 3;
   game.enemies = [];
   game.bullets = [];
   game.powerups = [];
@@ -796,6 +822,7 @@ function resetGameForPlay() {
   game.paused = false;
   game.state = 'playing';
   spawnPlayers();
+  setHUD(false);
   updateHUD();
 }
 
@@ -923,6 +950,7 @@ function update() {
 
   updatePlayer(game.players[0], keys);
   if (game.mode === 'host' && game.players[1]) updatePlayer(game.players[1], remoteKeys);
+  else if (game.mode === 'local' && game.players[1]) updatePlayer(game.players[1], keys2);
 
   for (const e of game.enemies) updateEnemy(e);
 
@@ -1158,28 +1186,36 @@ function draw() {
 }
 
 /* ================= 输入 ================= */
-const keys = { up: false, down: false, left: false, right: false, space: false };
-const remoteKeys = { up: false, down: false, left: false, right: false, space: false };
+// 1P：WASD + 空格；2P（本地）：方向键 + Enter。单人/联机时方向键也归 1P 使用。
+const keys = { up: false, down: false, left: false, right: false, space: false };       // 1P
+const keys2 = { up: false, down: false, left: false, right: false, space: false };      // 2P（本地）
+const remoteKeys = { up: false, down: false, left: false, right: false, space: false }; // 2P（联机）
 
-const KEYMAP = {
-  ArrowUp: 'up', KeyW: 'up',
-  ArrowDown: 'down', KeyS: 'down',
-  ArrowLeft: 'left', KeyA: 'left',
-  ArrowRight: 'right', KeyD: 'right',
-  Space: 'space',
-};
+const P1MAP = { KeyW: 'up', KeyA: 'left', KeyS: 'down', KeyD: 'right', Space: 'space' };
+const P2MAP = { ArrowUp: 'up', ArrowLeft: 'left', ArrowDown: 'down', ArrowRight: 'right', Enter: 'space' };
+
+function isLocalMode() {
+  return game.mode === 'local' || game.mode === 'duel';
+}
 
 function setKey(code, val) {
-  if (KEYMAP[code]) {
-    keys[KEYMAP[code]] = val;
+  if (P1MAP[code]) {
+    keys[P1MAP[code]] = val;
     if (game.mode === 'guest') sendInputs();   // 房客即时上报输入
+  } else if (P2MAP[code]) {
+    if (isLocalMode()) {
+      keys2[P2MAP[code]] = val;                // 本地模式：方向键 / Enter 归 2P
+    } else {
+      keys[P2MAP[code]] = val;                 // 其它模式：方向键归 1P
+      if (game.mode === 'guest') sendInputs();
+    }
   } else if (code === 'KeyP' && val) {
     togglePause();
   }
 }
 
 window.addEventListener('keydown', e => {
-  if (KEYMAP[e.code] || e.code === 'KeyP') e.preventDefault();
+  if (P1MAP[e.code] || P2MAP[e.code] || e.code === 'KeyP') e.preventDefault();
   setKey(e.code, true);
 });
 window.addEventListener('keyup', e => {
@@ -1204,10 +1240,18 @@ const cancelBtn = document.getElementById('cancelBtn');
 const keysHint = document.getElementById('keysHint');
 const soundBtn = document.getElementById('soundBtn');
 const soloBtn = document.getElementById('soloBtn');
+const localBtn = document.getElementById('localBtn');
+const duelBtn = document.getElementById('duelBtn');
 const hostBtn = document.getElementById('hostBtn');
 const joinBtn = document.getElementById('joinBtn');
 const joinInput = document.getElementById('joinInput');
 const copyBtn = document.getElementById('copyBtn');
+
+const normalHudEl = document.getElementById('normalHud');
+const duelHudEl = document.getElementById('duelHud');
+const p1scoreEl = document.getElementById('p1score');
+const p2scoreEl = document.getElementById('p2score');
+const duelTargetEl = document.getElementById('duelTarget');
 
 const scoreEl = document.getElementById('score');
 const levelEl = document.getElementById('level');
@@ -1230,7 +1274,7 @@ function showOverlayPanel(title, html, opts) {
 
 function showMenu() {
   showOverlayPanel('坦克大战',
-    '消灭所有敌方坦克并保护你的基地。<br>可以单人游玩，也可以和好友联机合作。',
+    '消灭所有敌方坦克并保护基地；支持<b>单人</b>、<b>本地双人</b>、<b>1v1 对战</b>与<b>联机合作</b>。',
     { menu: true });
 }
 
@@ -1259,6 +1303,11 @@ function hideOverlay() {
   overlay.classList.add('hidden');
 }
 
+function setHUD(duel) {
+  normalHudEl.style.display = duel ? 'none' : 'flex';
+  duelHudEl.style.display = duel ? 'flex' : 'none';
+}
+
 function updateNetStatus(text) {
   if (text) {
     netStatEl.style.display = '';
@@ -1269,6 +1318,8 @@ function updateNetStatus(text) {
 }
 
 soloBtn.addEventListener('click', startSolo);
+localBtn.addEventListener('click', startLocal);
+duelBtn.addEventListener('click', startDuel);
 hostBtn.addEventListener('click', hostGame);
 joinBtn.addEventListener('click', () => joinGame(joinInput.value));
 joinInput.addEventListener('keydown', e => {
@@ -1299,7 +1350,10 @@ function toMenu() {
   game.particles = [];
   game.explosions = [];
   game.paused = false;
+  game.duelWinner = null;
+  game.duelRespawn = [0, 0];
   updateNetStatus('');
+  setHUD(false);
   showMenu();
   updateHUD();
 }
@@ -1601,6 +1655,248 @@ function guestTick() {
   }
 }
 
+/* ================= 对战模式（1v1，同屏） ================= */
+const DUEL_TARGET = 5;          // 先到 5 分获胜
+
+const DUEL_SPAWNS = [
+  { tx: 1, ty: 1 },             // 1P 左上
+  { tx: COLS - 2, ty: ROWS - 2 }, // 2P 右下
+];
+
+const DUEL_MAP = [
+  [0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,1,0,1,0,1,0,1,0,1,0,0],
+  [0,1,0,1,0,1,0,1,0,1,0,1,0],
+  [0,0,0,1,0,0,4,0,0,1,0,0,0],
+  [0,1,0,0,2,0,0,0,2,0,0,1,0],
+  [0,0,1,0,0,0,2,0,0,0,1,0,0],
+  [0,1,0,0,2,0,0,0,2,0,0,1,0],
+  [0,0,0,1,0,0,4,0,0,1,0,0,0],
+  [0,1,0,1,0,1,0,1,0,1,0,1,0],
+  [0,0,1,0,1,0,1,0,1,0,1,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0],
+];
+
+function startDuel() {
+  cleanupNet();
+  game.mode = 'duel';
+  resetDuel();
+  hideOverlay();
+  updateNetStatus('');
+}
+
+function resetDuel() {
+  game.level = 1;
+  map = DUEL_MAP.map(r => r.slice());
+  game.score = 0;
+  game.score2 = 0;
+  game.lives = 3;
+  game.enemies = [];
+  game.bullets = [];
+  game.powerups = [];
+  game.particles = [];
+  game.explosions = [];
+  game.baseAlive = true;
+  game.enemiesLeft = 0;
+  game.freezeTimer = 0;
+  game.baseWallTimer = 0;
+  game.levelBanner = 0;
+  game.enemiesKilled = 0;
+  game.duelRespawn = [0, 0];
+  game.duelWinner = null;
+  game.powerupTimer = 240;
+  game.paused = false;
+  game.players = [makeDuelPlayer(0), makeDuelPlayer(1)];
+  game.state = 'playing';
+  setHUD(true);
+  updateDuelHUD();
+}
+
+function makeDuelPlayer(idx) {
+  const sp = DUEL_SPAWNS[idx];
+  const pos = tilePos(sp.tx, sp.ty);
+  const p = makeTank(pos.x, pos.y, idx === 0 ? 'right' : 'left', {
+    isPlayer: true, speed: 2.8, stars: 1, color: PLAYER_COLORS[idx],
+  });
+  p.spawnProtect = 120;
+  return p;
+}
+
+function updateDuelHUD() {
+  p1scoreEl.textContent = game.score;
+  p2scoreEl.textContent = game.score2;
+  duelTargetEl.textContent = DUEL_TARGET;
+}
+
+function updateDuel() {
+  if (game.state !== 'playing' || game.paused) return;
+
+  if (game.levelBanner > 0) game.levelBanner--;
+
+  // 道具刷新
+  game.powerupTimer--;
+  if (game.powerupTimer <= 0) {
+    spawnDuelPowerup();
+    game.powerupTimer = 360 + Math.floor(Math.random() * 240);
+  }
+
+  // 玩家操作
+  for (let i = 0; i < 2; i++) {
+    const p = game.players[i];
+    if (!p || !p.alive) continue;
+    updatePlayer(p, i === 0 ? keys : keys2);
+  }
+
+  // 重生倒计时
+  for (let i = 0; i < 2; i++) {
+    if (game.duelRespawn[i] > 0) {
+      game.duelRespawn[i]--;
+      if (game.duelRespawn[i] === 0) respawnDuelPlayer(i);
+    }
+  }
+
+  // 子弹
+  for (const b of game.bullets) moveBulletDuel(b);
+  game.bullets = game.bullets.filter(b => !b.dead);
+
+  checkPowerupPickup();
+  updateParticles();
+  updateExplosions();
+
+  // 胜负判定
+  if (game.duelWinner === null) {
+    if (game.score >= DUEL_TARGET) game.duelWinner = 0;
+    else if (game.score2 >= DUEL_TARGET) game.duelWinner = 1;
+    if (game.duelWinner !== null) endDuel();
+  }
+
+  updateDuelHUD();
+}
+
+function moveBulletDuel(b) {
+  const d = DIRS[b.dir];
+  b.x += d.x * b.speed;
+  b.y += d.y * b.speed;
+
+  if (b.x < 0 || b.y < 0 || b.x >= W || b.y >= H) { b.dead = true; return; }
+
+  const cx = Math.floor(b.x / TILE);
+  const cy = Math.floor(b.y / TILE);
+  const tile = map[cy][cx];
+  if (tile === BRICK) {
+    map[cy][cx] = EMPTY;
+    spawnParticles(cx * TILE + TILE / 2, cy * TILE + TILE / 2, '#b0703a', 8);
+    sfx.hit();
+    b.dead = true;
+    return;
+  }
+  if (tile === STEEL) {
+    if (b.power >= 2) {
+      map[cy][cx] = EMPTY;
+      spawnParticles(cx * TILE + TILE / 2, cy * TILE + TILE / 2, '#aeb8c4', 8);
+      sfx.hit();
+    }
+    b.dead = true;
+    return;
+  }
+
+  // 命中对方玩家
+  for (const t of game.players) {
+    if (!t || !t.alive || t === b.owner) continue;
+    if (pointInRect(b.x, b.y, t.x, t.y, t.size, t.size)) {
+      b.dead = true;
+      damageDuel(t, b.owner);
+      return;
+    }
+  }
+
+  // 命中道具
+  for (const u of game.powerups) {
+    if (pointInRect(b.x, b.y, u.x, u.y, TILE, TILE)) {
+      game.powerups = game.powerups.filter(x => x !== u);
+      b.dead = true;
+      return;
+    }
+  }
+}
+
+function damageDuel(victim, killer) {
+  if (victim.shield > 0 || victim.spawnProtect > 0) {
+    spawnParticles(victim.x + victim.size / 2, victim.y + victim.size / 2, '#ffffff', 4);
+    return;
+  }
+  victim.hp--;
+  if (victim.hp <= 0) {
+    spawnParticles(victim.x + victim.size / 2, victim.y + victim.size / 2, victim.color, 20);
+    spawnExplosion(victim.x + victim.size / 2, victim.y + victim.size / 2, victim.color);
+    sfx.explode();
+    victim.alive = false;
+    const vidx = game.players.indexOf(victim);
+    const kidx = game.players.indexOf(killer);
+    if (kidx === 0) game.score++;
+    else game.score2++;
+    game.duelRespawn[vidx] = 90;
+  } else {
+    spawnParticles(victim.x + victim.size / 2, victim.y + victim.size / 2, '#ffffff', 6);
+    sfx.hit();
+  }
+}
+
+function respawnDuelPlayer(idx) {
+  const sp = DUEL_SPAWNS[idx];
+  const pos = tilePos(sp.tx, sp.ty);
+  const p = game.players[idx];
+  p.alive = true;
+  p.hp = 1;
+  p.stars = 1;
+  p.x = pos.x;
+  p.y = pos.y;
+  p.dir = idx === 0 ? 'right' : 'left';
+  p.shield = 0;
+  p.spawnProtect = 120;
+}
+
+function spawnDuelPowerup() {
+  const types = ['star', 'helmet', 'bomb'];
+  for (let tries = 0; tries < 40; tries++) {
+    const tx = 1 + Math.floor(Math.random() * (COLS - 2));
+    const ty = 1 + Math.floor(Math.random() * (ROWS - 2));
+    if (isSolid(map[ty][tx]) || map[ty][tx] === WATER) continue;
+    let occ = false;
+    for (const p of game.players) {
+      if (p && p.alive && overlap({ x: p.x, y: p.y, w: p.size, h: p.size }, { x: tx * TILE, y: ty * TILE, w: TILE, h: TILE })) occ = true;
+    }
+    if (occ) continue;
+    game.powerups.push({
+      x: tx * TILE, y: ty * TILE,
+      type: types[Math.floor(Math.random() * types.length)],
+    });
+    return;
+  }
+}
+
+function duelBomb(p) {
+  const other = game.players.find(x => x && x !== p && x.alive);
+  if (!other) return;
+  const kidx = game.players.indexOf(p);
+  const vidx = game.players.indexOf(other);
+  if (kidx === 0) game.score++;
+  else game.score2++;
+  spawnExplosion(other.x + other.size / 2, other.y + other.size / 2, other.color);
+  other.alive = false;
+  game.duelRespawn[vidx] = 90;
+}
+
+function endDuel() {
+  game.state = 'over';
+  const name = game.duelWinner === 0 ? '玩家 1' : '玩家 2';
+  showOverlayPanel('对战结束',
+    name + ' 获胜！比分 ' + game.score + ' : ' + game.score2,
+    { start: true });
+}
+
 /* ================= 触屏控制 ================= */
 function setupTouch() {
   const pad = document.getElementById('touchPad');
@@ -1630,6 +1926,9 @@ function loop() {
   game.frame++;
   if (game.mode === 'guest') {
     guestTick();
+  } else if (game.mode === 'duel') {
+    updateDuel();
+    draw();
   } else {
     update();
     draw();
