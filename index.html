@@ -1922,7 +1922,14 @@ showMenu();
 updateHUD();
 setupTouch();
 
-function loop() {
+// 固定 60 步/秒的逻辑帧率：requestAnimationFrame 会跟着屏幕刷新率跑，
+// 在高刷屏（120/144/240Hz）上会导致移速/射速成倍变快，这里用累加器把
+// 逻辑步进锁死在 60Hz，避免「开了几倍速」的问题。
+const STEP_MS = 1000 / 60;
+let lastTime = performance.now();
+let acc = 0;
+
+function step() {
   game.frame++;
   if (game.mode === 'guest') {
     guestTick();
@@ -1933,9 +1940,21 @@ function loop() {
     update();
     draw();
   }
+}
+
+function loop(now) {
+  acc += now - lastTime;
+  lastTime = now;
+  if (acc > 1000) acc = 1000;   // 切到后台再回来时避免大量补帧
+  let n = 0;
+  while (acc >= STEP_MS && n < 4) {
+    step();
+    acc -= STEP_MS;
+    n++;
+  }
   requestAnimationFrame(loop);
 }
-loop();
+requestAnimationFrame(loop);
 </script>
 </body>
 </html>
